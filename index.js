@@ -31,70 +31,72 @@ async function handleMintTask() {
   const workerNum = Math.min(keysPrivateKeys.length, os.cpus().length);
   let activeWorkerCount = workerNum;
   for (let i = 0; i < workerNum; i++) {
-    logger.info(`Start ${i} child process...`);
+    setTimeout(() => {
+      logger.info(`Start ${i} child process...`);
 
-    const child = cp.fork(callerPath, [i + 1]);
+      const child = cp.fork(callerPath, [i + 1]);
 
-    child.on("error", (msg) => {
-      logger.error(msg);
-    });
+      child.on("error", (msg) => {
+        logger.error(msg);
+      });
 
-    child.on("exit", (code) => {
-      logger.info(`子进程退出，退出码 ${code}`);
-      activeWorkerCount--;
+      child.on("exit", (code) => {
+        logger.info(`子进程退出，退出码 ${code}`);
+        activeWorkerCount--;
 
-      if (activeWorkerCount === 0) {
-        //运行完 将 sellerPrivateKeys 和 getWallet(sellerPrivateKeys)导出到 sellerNew.txt
-        fs.writeFileSync(
-          sucessAddressPath,
-          sucessAddress
-            .map((item) => `${item.address}----${item.privateKey}`)
-            .join("\n")
-        );
-        fs.writeFileSync(
-          failAddressPath,
-          failAddress
-            .map((item) => `${item.address}----${item.privateKey}`)
-            .join("\n")
-        );
-        logger.info(`任务执行完毕`);
-        // process.exit(0);
-      }
-    });
+        if (activeWorkerCount === 0) {
+          //运行完 将 sellerPrivateKeys 和 getWallet(sellerPrivateKeys)导出到 sellerNew.txt
+          fs.writeFileSync(
+              sucessAddressPath,
+              sucessAddress
+                  .map((item) => `${item.address}----${item.privateKey}`)
+                  .join("\n")
+          );
+          fs.writeFileSync(
+              failAddressPath,
+              failAddress
+                  .map((item) => `${item.address}----${item.privateKey}`)
+                  .join("\n")
+          );
+          logger.info(`任务执行完毕`);
+          // process.exit(0);
+        }
+      });
 
-    child.on("message", (message) => {
-      switch (message.type) {
-        case "requestItem":
-          // 处理子进程请求新任务的逻辑
-          // console.log("子进程请求新任务");
-          let rpc = randomRpc();
-          let taskNum = keysPrivateKeys.length;
-          let privateKey = keysPrivateKeys.shift();
+      child.on("message", (message) => {
+        switch (message.type) {
+          case "requestItem":
+            // 处理子进程请求新任务的逻辑
+            // console.log("子进程请求新任务");
+            let rpc = randomRpc();
+            let taskNum = keysPrivateKeys.length;
+            let privateKey = keysPrivateKeys.shift();
 
-          child.send({
-            rpc,
-            privateKey,
-            taskNum,
-          });
-          // 假设这里有逻辑来检查是否还有剩余任务，然后发送任务信息给子进程
-          break;
-        case "result":
-          // 处理子进程发送的操作结果
-          let status = message.status;
-          if (status === true) {
-            sucessAddress.push(message.address);
-          } else {
-            {
-              failAddress.push(message.address);
+            child.send({
+              rpc,
+              privateKey,
+              taskNum,
+            });
+            // 假设这里有逻辑来检查是否还有剩余任务，然后发送任务信息给子进程
+            break;
+          case "result":
+            // 处理子进程发送的操作结果
+            let status = message.status;
+            if (status === true) {
+              sucessAddress.push(message.address);
+            } else {
+              {
+                failAddress.push(message.address);
+              }
             }
-          }
 
-          // 这里可以根据操作结果执行相应的逻辑，如更新数据库等
-          break;
-        default:
-          console.log("未知消息类型");
-      }
-    });
+            // 这里可以根据操作结果执行相应的逻辑，如更新数据库等
+            break;
+          default:
+            console.log("未知消息类型");
+        }
+      });
+    }, 5000 * i);
   }
 }
 
